@@ -8,9 +8,7 @@
     <EmbeddedResource Include="**/*.resx" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="native.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <None Include="native.dll" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETCore.App" Version="1.0.1" />
