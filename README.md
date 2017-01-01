@@ -7,5 +7,6 @@ I'm not so keen on the idea of writing C though, I'd much rather write Rust. Thi
 ## What would be nice
 
 - Basic tooling to invoke `cargo` from `dotnet`, and link it as a standard project reference
+- Linux support
 - Share byte arrays between Rust and C#
 - Poll a C# `Task` from Rust as a `Future`
