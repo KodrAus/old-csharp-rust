@@ -5,10 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="**/*.cs" />
+    <Content Include="native.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <EmbeddedResource Include="**/*.resx" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="native.dll" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETCore.App" Version="1.0.1" />
