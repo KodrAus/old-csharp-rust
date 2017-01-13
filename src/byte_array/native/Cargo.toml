@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 [dependencies]
 libc = "*"
 slab = "*"
-pool = { version = "*", git = "https://github.com/Geal/pool.git" }
+pool = "*"
