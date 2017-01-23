@@ -42,6 +42,11 @@ class Program
         
         public void Write(Span<byte> data)
         {
+            if (IsClosed)
+            {
+                throw new ObjectDisposedException("Buffer already closed");
+            }
+
             Write(data, false);
         }
 
