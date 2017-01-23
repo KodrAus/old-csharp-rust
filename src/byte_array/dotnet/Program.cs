@@ -1,49 +1,133 @@
 using System;
-using System.Buffers;
-using System.Text.Utf8;
+using System.Runtime.InteropServices;
 
 class Program
 {
-    class Pool
+    private class Native
     {
-        const int _size = 1024;
-        NativeBufferPool _pool = new NativeBufferPool(_size);
+        [DllImport("native", EntryPoint = "alloc")]
+        internal static extern Buf Alloc(UIntPtr size);
 
-        public OwnedMemory<byte> Rent()
+        [DllImport("native", EntryPoint = "drop")]
+        internal static extern void Drop(Buf buf);
+
+        [DllImport("native", EntryPoint = "reserve")]
+        internal static extern Buf Reserve(Buf buf, UIntPtr reserve);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Buf
+    {
+        public IntPtr ptr;
+        public UIntPtr len;
+        public IntPtr cap;
+    }
+
+    private class BufHandle : SafeHandle
+    {
+        public BufHandle()
+            : base(IntPtr.Zero, true)
+        { }
+        
+        private bool allocated;
+        private Buf value;
+
+        private Span<byte> Slice()
         {
-            return _pool.Rent(_size);
+            unsafe
+            {
+                return new Span<byte>(value.ptr.ToPointer(), (int)value.cap).Slice((int)value.len);
+            }
+        }
+        
+        public void Write(Span<byte> data)
+        {
+            Write(data, false);
         }
 
-        public void Return(OwnedMemory<byte> buffer)
+        // A method to copy the contents of a buffer to the our native buffer.
+        // This isn't optimised, so it's simple and readable.
+        private void Write(Span<byte> data, bool resized)
         {
-            _pool.Return(buffer);
+            var dataLen = data.Length;
+
+            if (!allocated)
+            {
+                // If the buffer isn't allocated then go and do that
+
+                value = Native.Alloc(new UIntPtr((uint)dataLen));
+                allocated = true;
+
+                Write(data, true);
+            }
+            else
+            {
+                // If the buffer is allocated, make sure it has enough space
+
+                var available = (int)value.cap - (int)value.len;
+
+                if (dataLen > available)
+                {
+                    // If there isn't enough space, resize and try write again
+
+                    if (resized)
+                    {
+                        throw new Exception("Already tried to resize buffer");
+                    }
+
+                    var needed = dataLen - available;
+
+                    value = Native.Reserve(value, new UIntPtr((uint)needed));
+
+                    Write(data, true);
+                }
+                else
+                {
+                    // If the buffer is allocated and there's space, then copy the bits
+
+                    var slice = Slice();
+
+                    data.CopyTo(slice);
+                    value.len += dataLen;
+                }
+            }
+        }
+
+        public override bool IsInvalid => false;
+
+        protected override bool ReleaseHandle()
+        {
+            Native.Drop(value);
+            return true;
         }
     }
 
-    static int Write(ReadOnlySpan<char> utf16Src, Span<byte> dst)
+    public class Buffer : IDisposable
     {
-        Utf8Encoder.TryEncode(utf16Src, dst, out int encoded);
+        private BufHandle handle;
 
-        return encoded;
-    }
+        public Buffer()
+        {
+            handle = new BufHandle();
+        }
 
-    static int Write(ReadOnlySpan<byte> src, Span<byte> dst)
-    {
-        src.CopyTo(dst);
+        public void Write(Span<byte> data)
+        {
+            handle.Write(data);
+        }
 
-        return src.Length;
+        public void Dispose()
+        {
+            handle.Dispose();
+        }
     }
 
     static void Main(string[] args)
     {
-        var pool = new Pool();
-        
-        var mem1 = pool.Rent();
-        var written1 = Write("Hello, World".Slice(), mem1.Span);
-        var slice1 = mem1.Memory.Slice(0, written1);
-
-        var mem2 = pool.Rent();
-        var written2 = Write(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 }.Slice(), mem2.Span);
-        var slice2 = mem2.Memory.Slice(0, written2);
+        using (var buffer = new Buffer())
+        {
+            buffer.Write(new byte[] { 0, 1, 2, 3 }.Slice());
+            buffer.Write(new byte[] { 4, 5, 6 }.Slice());
+        }
     }
 }

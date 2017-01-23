@@ -1,63 +1,65 @@
-extern crate slab;
-extern crate pool;
+extern crate libc;
 
-use slab::Slab;
-use pool::{Pool, Dirty, Checkout};
+use std::mem;
+use libc::size_t;
 
-// TODO: Make this thread safe
-struct MemPool {
-	checkouts: Slab<Checkout<Dirty<()>>>,
-	buffer: Pool<Dirty<()>>
+#[repr(C)]
+pub struct Buf {
+	ptr: *mut u8,
+	len: size_t,
+	cap: size_t,
 }
 
-#[cfg(test)]
-mod tests {
-	use slab::Slab;
-	use pool::{Pool, Dirty};
-	use super::MemPool;
+impl Buf {
+	/// Build a `Buf` structure from a native `Vec`.
+	/// 
+	/// This will leak memory unless `to_vec` is called.
+	fn from_vec(mut buf: Vec<u8>) -> Self {
+		let ptr = buf.as_mut_ptr();
+		let len = buf.len();
+		let cap = buf.capacity();
 
-	#[test]
-	fn it_works() {
-		// Create a memory pool
-		let mut pool = MemPool {
-			checkouts: Slab::with_capacity(1),
-			buffer: Pool::with_capacity(1, 4, || Dirty(()))
-		};
+		mem::forget(buf);
 
-		// Get an entry from the pool, store a handle to it and return its index and pointer
-		let (idx, ptr) = {
-			let buf = pool.buffer.checkout().unwrap();
-			let mut entry = pool.checkouts
-				.vacant_entry()
-				.unwrap()
-				.insert(buf);
-				
-			let ptr = entry
-				.get_mut()
-				.extra_mut()
-				.as_mut_ptr();
-
-			(entry.index(), ptr)
-		};
-
-		// Someone writing to this memory from C#
-		{
-			let mut slice = unsafe { ptr.as_mut().unwrap() };
-			*slice = 1;
+		Buf {
+			ptr: ptr,
+			len: len,
+			cap: cap,
 		}
-
-		// The pool is now full so we can't checkout anymore
-		assert!(pool.buffer.checkout().is_none());
-
-		// Remove the entry and let it fall out of scope
-		{
-			let _ = pool.checkouts.remove(idx).unwrap();
-		}
-
-		// The pool is not full so we can checkout again
-		let entry = pool.buffer.checkout().unwrap();
-
-		let bytes = entry.extra();
-		assert_eq!(&[1,0,0,0,0,0,0,0], bytes);
 	}
+
+	/// Convert this `Buf` into a native `Vec`.
+	/// 
+	/// This will drop the value when it goes out of scope unless `from_vec` is called.
+	unsafe fn to_vec(self) -> Vec<u8> {
+		Vec::<u8>::from_raw_parts(self.ptr, self.len, self.cap)
+	}
+}
+
+#[no_mangle]
+pub extern fn alloc(size: size_t) -> Buf {
+	println!("allocating buffer: {}", size);
+
+	let buf = Vec::<u8>::with_capacity(size as usize);
+
+	Buf::from_vec(buf)
+}
+
+#[no_mangle]
+pub extern fn reserve(buf: Buf, reserve: size_t) -> Buf {
+	println!("reserving {} extra bytes", reserve);
+
+	let mut buf = unsafe { buf.to_vec() };
+
+	buf.reserve(reserve);
+
+	Buf::from_vec(buf)
+}
+
+#[no_mangle]
+pub extern fn drop(buf: Buf) {
+	let buf = unsafe { buf.to_vec() };
+
+	println!("contains: {:?}", buf);
+	println!("dropping buffer");
 }
