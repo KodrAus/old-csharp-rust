@@ -7,4 +7,3 @@ project.lock.json
 *.pyc
 .vscode
 .vs
-*.dll

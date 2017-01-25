@@ -18,25 +18,26 @@ use clap::ArgMatches;
 use args::FromArgs;
 
 fn main() {
-	let matches = args::app().get_matches();
+    let matches = args::app().get_matches();
 
     match build(matches) {
-    	Ok(_) => {
-    		println!("{}", Green.paint("The build finished successfully"));
-    	},
-    	Err(e) => {
-    		println!("{}", Red.paint(e));
-    		println!("\n{}", Red.bold().paint("The build did not finish successfully"));
-    	}
+        Ok(_) => {
+            println!("{}", Green.paint("The build finished successfully"));
+        }
+        Err(e) => {
+            println!("{}", Red.paint(e));
+            println!("\n{}",
+                     Red.bold().paint("The build did not finish successfully"));
+        }
     }
 }
 
 fn build(args: ArgMatches) -> Result<(), error::BuildError> {
-	cargo::build(cargo::CargoBuildArgs::from_args(&args))?;
+    cargo::build(cargo::CargoBuildArgs::from_args(&args))?;
 
-	artifact::copy(artifact::CopyArtifactArgs::from_args(&args))?;
+    artifact::copy(artifact::CopyArtifactArgs::from_args(&args))?;
 
-	msbuild::build(msbuild::MsBuildArgs::from_args(&args))?;
+    msbuild::build(msbuild::MsBuildArgs::from_args(&args))?;
 
-	Ok(())
+    Ok(())
 }

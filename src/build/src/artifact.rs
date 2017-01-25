@@ -6,47 +6,53 @@ use cargo::CargoPkg;
 use msbuild::MsBuildPkg;
 
 pub fn copy(args: CopyArtifactArgs) -> Result<(), CopyArtifactsError> {
-	heading!("Copying rust artifacts", args);
+    heading!("Copying rust artifacts", args);
 
-	let rst_src = args.rst_src;
-	let msbuild_dst = args.msbuild_dst;
+    let rst_src = args.rst_src;
+    let msbuild_dst = args.msbuild_dst;
 
-	fs::copy(&rst_src, &msbuild_dst).map_err(|e| CopyArtifactsError::Io { src: rst_src, dst: msbuild_dst, err: e })?;
+    fs::copy(&rst_src, &msbuild_dst).map_err(|e| {
+            CopyArtifactsError::Io {
+                src: rst_src,
+                dst: msbuild_dst,
+                err: e,
+            }
+        })?;
 
-	Ok(())
+    Ok(())
 }
 
 #[derive(Debug, PartialEq)]
 pub struct CopyArtifactArgs {
-	rst_src: String,
-	msbuild_dst: String
+    rst_src: String,
+    msbuild_dst: String,
 }
 
 #[cfg(windows)]
 const EXT: &'static str = "dll";
 
 impl FromArgs for CopyArtifactArgs {
-	fn from_args(args: &ArgMatches) -> Self {
-		let target = BuildTarget::from_args(args);
+    fn from_args(args: &ArgMatches) -> Self {
+        let target = BuildTarget::from_args(args);
 
-		let CargoPkg(cargopkg) = CargoPkg::from_args(args);
-		let MsBuildPkg(msbuildpkg) = MsBuildPkg::from_args(args);
+        let CargoPkg(cargopkg) = CargoPkg::from_args(args);
+        let MsBuildPkg(msbuildpkg) = MsBuildPkg::from_args(args);
 
-		let target = match target {
-			BuildTarget::Debug => "debug",
-			BuildTarget::Release => "release"
-		};
+        let target = match target {
+            BuildTarget::Debug => "debug",
+            BuildTarget::Release => "release",
+        };
 
-		let file = format!("{}.{}", cargopkg, EXT);
+        let file = format!("{}.{}", cargopkg, EXT);
 
-		let rst_src = format!("{}/target/{}/{}", cargopkg, target, file);
-		let msbuild_dst = format!("{}/{}", msbuildpkg, file);
+        let rst_src = format!("{}/target/{}/{}", cargopkg, target, file);
+        let msbuild_dst = format!("{}/{}", msbuildpkg, file);
 
-		CopyArtifactArgs {
-			rst_src: rst_src,
-			msbuild_dst: msbuild_dst
-		}
-	}
+        CopyArtifactArgs {
+            rst_src: rst_src,
+            msbuild_dst: msbuild_dst,
+        }
+    }
 }
 
 quick_error!{
