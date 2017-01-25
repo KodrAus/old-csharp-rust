@@ -1,7 +1,7 @@
 use std::process::{Command, Stdio};
 use std::io::Error as IoError;
 use clap::{Arg, ArgMatches};
-use args::{FromArgs, BuildKind, BuildTarget};
+use args::{FromArgs, BuildKind, BuildTarget, BuildPlatform};
 
 pub fn build(args: CargoBuildArgs) -> Result<(), CargoError> {
     heading!("Building rust project", args);
@@ -16,6 +16,16 @@ pub fn build(args: CargoBuildArgs) -> Result<(), CargoError> {
         BuildKind::Build => "build",
         BuildKind::Test => "test",
     });
+
+    if args.platform != BuildPlatform::default() {
+        let platform = match args.platform {
+            BuildPlatform::Windows => "x86_64-pc-windows-gnu",
+            BuildPlatform::Osx => "x86_64-apple-darwin",
+            BuildPlatform::Linux => "x86_64-unknown-linux-gnu",
+        };
+
+        cargo.arg(format!("--target={}", platform));
+    }
 
     if args.target == BuildTarget::Release {
         cargo.arg("--release");
@@ -41,16 +51,22 @@ pub struct CargoBuildArgs {
     pub work_dir: String,
     pub kind: BuildKind,
     pub target: BuildTarget,
+    pub platform: BuildPlatform,
 }
 
 impl FromArgs for CargoBuildArgs {
     fn from_args(args: &ArgMatches) -> Self {
         let CargoPkg(work_dir) = CargoPkg::from_args(args);
+        let platforms = Vec::<BuildPlatform>::from_args(args);
+
+        // TODO: Support multiple platforms
+        let platform = platforms.into_iter().next().unwrap_or(BuildPlatform::default());
 
         CargoBuildArgs {
             work_dir: work_dir,
             kind: BuildKind::from_args(args),
             target: BuildTarget::from_args(args),
+            platform: platform,
         }
     }
 }

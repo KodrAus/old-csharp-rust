@@ -30,6 +30,10 @@ pub struct CopyArtifactArgs {
 
 #[cfg(windows)]
 const EXT: &'static str = "dll";
+#[cfg(macos)]
+const EXT: &'static str = "dylib";
+#[cfg(unix)]
+const EXT: &'static str = "so";
 
 impl FromArgs for CopyArtifactArgs {
     fn from_args(args: &ArgMatches) -> Self {
