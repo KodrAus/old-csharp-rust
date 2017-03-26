@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 class Native
 {
     // A simple external Rust function
-    [DllImport("native", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("hello_native", ExactSpelling = true)]
     static extern void hello_from_rust(int a);
 
     // Call `hello_from_rust`
@@ -14,7 +14,7 @@ class Native
     }
     
     // An external Rust function that'll execute a fn pointer
-    [DllImport("native", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport("hello_native", ExactSpelling = true)]
     static extern void say_hello(say_hello_cb cb);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
