@@ -5,13 +5,13 @@ namespace dotnet
 {
     class Native
     {
-        [DllImport("native", EntryPoint = "alloc")]
+        [DllImport("bytearray_native", EntryPoint = "alloc", ExactSpelling = true)]
         internal static extern Buf Alloc(UIntPtr size);
 
-        [DllImport("native", EntryPoint = "drop")]
+        [DllImport("bytearray_native", EntryPoint = "drop", ExactSpelling = true)]
         internal static extern void Drop(Buf buf);
 
-        [DllImport("native", EntryPoint = "reserve")]
+        [DllImport("bytearray_native", EntryPoint = "reserve", ExactSpelling = true)]
         internal static extern Buf Reserve(Buf buf, UIntPtr reserve);
     }
 
