@@ -1,6 +1,6 @@
 using System;
 
-namespace dotnet
+namespace ByteArray
 {
     class Program
     {
@@ -16,7 +16,7 @@ namespace dotnet
     {
         public static void SingleWrite()
         {
-            using (var buffer = new Buffer())
+            using (var buffer = new VecWriter())
             {
                 buffer.Write(new byte[] { 0, 1, 2, 3 }.Slice());
             }
@@ -24,7 +24,7 @@ namespace dotnet
 
         public static void MultiWrite()
         {
-            using (var buffer = new Buffer())
+            using (var buffer = new VecWriter())
             {
                 buffer.Write(new byte[] { 0, 1, 2, 3 }.Slice());
                 buffer.Write(new byte[] { 4, 5, 6 }.Slice());
