@@ -44,9 +44,16 @@ namespace ByteArray
         private bool _allocated;
         private ResizeBuf _value;
 
+        public override bool IsInvalid => false;
+
         // Get a span for the written part of the buf
         public Span<byte> Read()
         {
+            if (IsClosed)
+            {
+                throw new ObjectDisposedException("ResizeBuf already closed");
+            }
+
             unsafe
             {
                 return ValueSpan().Slice(0, (int)_value.len);
@@ -124,8 +131,6 @@ namespace ByteArray
         {
             return new Span<byte>(_value.ptr.ToPointer(), (int)_value.cap);
         }
-
-        public override bool IsInvalid => false;
 
         protected override bool ReleaseHandle()
         {
