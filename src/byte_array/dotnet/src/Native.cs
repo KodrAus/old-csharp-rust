@@ -1,4 +1,12 @@
-﻿using System;
+﻿/*
+
+A simple reader/writer for a Rust Vec that can be resized.
+
+TODO: Decide whether to track C# buffers through ref counting.
+
+*/
+
+using System;
 using System.Runtime.InteropServices;
 
 namespace ByteArray
@@ -6,50 +14,54 @@ namespace ByteArray
     internal class Native
     {
         [DllImport("bytearray_native", EntryPoint = "alloc", ExactSpelling = true)]
-        internal static extern Vec Alloc(UIntPtr size);
+        internal static extern ResizeBuf Alloc(UIntPtr size);
 
         [DllImport("bytearray_native", EntryPoint = "drop", ExactSpelling = true)]
-        internal static extern void Drop(Vec buf);
+        internal static extern void Drop(ResizeBuf buf);
 
         [DllImport("bytearray_native", EntryPoint = "reserve", ExactSpelling = true)]
-        internal static extern Vec Reserve(Vec buf, UIntPtr reserve);
+        internal static extern ResizeBuf Reserve(ResizeBuf buf, UIntPtr reserve);
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Vec
+    internal struct ResizeBuf
     {
         public IntPtr ptr;
         public UIntPtr len;
         public IntPtr cap;
     }
 
-    internal class VecHandle : SafeHandle
+    // NOTE: This class is not thread-safe and doesn't prevent
+    // reads during writes. Use `ResizeBufReader` and `ResizeBufWriter`
+    // instead.
+    // 
+    // If I rethink the ownership strategy though it'll probably do something
+    // here.
+    internal class ResizeBufHandle : SafeHandle
     {
-        public VecHandle()
+        public ResizeBufHandle()
             : base(IntPtr.Zero, true)
         { }
 
         private bool _allocated;
-        private Vec _value;
+        private ResizeBuf _value;
 
-        private Span<byte> ValueSpan()
+        // Get a span for the written part of the buf
+        public Span<byte> Read()
         {
             unsafe
             {
-                return new Span<byte>(_value.ptr.ToPointer(), (int)_value.cap);
+                return ValueSpan().Slice(0, (int)_value.len);
             }
         }
-
-        public Span<byte> Read()
-        {
-            return ValueSpan().Slice(0, (int)_value.len);
-        }
         
+        // Append some bytes to the end of the buf
+        // TODO: Support writing into part of the vec
         public void Write(Span<byte> data)
         {
             if (IsClosed)
             {
-                throw new ObjectDisposedException("Vec already closed");
+                throw new ObjectDisposedException("ResizeBuf already closed");
             }
 
             Write(data, false);
@@ -82,7 +94,7 @@ namespace ByteArray
 
                     if (resized)
                     {
-                        throw new Exception("Already tried to resize Vec");
+                        throw new Exception("Already tried to resize ResizeBuf");
                     }
 
                     var needed = dataLen - available;
@@ -95,12 +107,24 @@ namespace ByteArray
                 {
                     // If the buffer is allocated and there's space, then copy the bits
 
-                    var slice = ValueSpan().Slice((int)_value.len);
+                    Span<byte> slice;
+
+                    unsafe 
+                    { 
+                        slice = ValueSpan().Slice((int)_value.len); 
+                    }
 
                     data.CopyTo(slice);
                     _value.len += dataLen;
                 }
             }
+        }
+
+        // Get a span for the entire buf
+        // This may span uninitialised memory
+        private unsafe Span<byte> ValueSpan()
+        {
+            return new Span<byte>(_value.ptr.ToPointer(), (int)_value.cap);
         }
 
         public override bool IsInvalid => false;
@@ -112,54 +136,56 @@ namespace ByteArray
         }
     }
 
-    public class VecWriter : IDisposable
+    public class ResizeBufWriter
     {
-        private VecHandle _handle;
+        private object _writeLock = new object();
+        private ResizeBufHandle _handle;
 
-        internal VecWriter(VecHandle handle)
+        internal ResizeBufWriter(ResizeBufHandle handle)
         {
             _handle = handle;
         }
 
-        public VecWriter() : this(new VecHandle())
+        public ResizeBufWriter() : this(new ResizeBufHandle())
         {
             
         }
         
         public void Write(Span<byte> data)
         {
-            if (_handle == null)
+            lock(_writeLock)
             {
-                throw new InvalidOperationException("Vec is not writable");
+                if (_handle == null)
+                {
+                    throw new InvalidOperationException("ResizeBuf is not writable");
+                }
+
+                _handle.Write(data);
             }
-
-            _handle.Write(data);
         }
 
-        public VecReader ToReader()
+        public ResizeBufReader ToReader()
         {
-            var reader = new VecReader(_handle);
-            _handle = null;
+            lock(_writeLock)
+            {
+                var reader = new ResizeBufReader(_handle);
+                _handle = null;
 
-            return reader;
-        }
-
-        public void Dispose()
-        {
-            _handle?.Dispose();
+                return reader;
+            }
         }
     }
 
-    public class VecReader : IDisposable
+    public class ResizeBufReader
     {
-        private VecHandle _handle;
+        private ResizeBufHandle _handle;
 
-        internal VecReader(VecHandle handle)
+        internal ResizeBufReader(ResizeBufHandle handle)
         {
             _handle = handle;
         }
 
-        public VecReader() : this(new VecHandle())
+        public ResizeBufReader() : this(new ResizeBufHandle())
         {
             
         }
@@ -168,23 +194,10 @@ namespace ByteArray
         {
             if (_handle == null)
             {
-                throw new InvalidOperationException("Vec is not readable");
+                throw new InvalidOperationException("ResizeBuf is not readable");
             }
 
             return _handle.Read();
-        }
-
-        public VecWriter ToWriter()
-        {
-            var writer = new VecWriter(_handle);
-            _handle = null;
-
-            return writer;
-        }
-
-        public void Dispose()
-        {
-            _handle?.Dispose();
         }
     }
 }
