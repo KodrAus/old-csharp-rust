@@ -43,7 +43,7 @@ namespace ByteArray
         {
             using (var reader = new VecReader())
             {
-                Assert.True(Span<byte>.Empty == reader.Slice());
+                Assert.Equal(Span<byte>.Empty.ToArray(), reader.Slice().ToArray());
             }
         }
 
