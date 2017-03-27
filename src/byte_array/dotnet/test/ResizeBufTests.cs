@@ -49,5 +49,23 @@ namespace ByteArray
 
             Assert.Throws<InvalidOperationException>(() => writer.Write(Span<byte>.Empty));
         }
+
+        [Fact]
+        public void Write_After_Dispose()
+        {
+            var writer = new ResizeBufWriter();
+            writer.Dispose();
+
+            Assert.Throws<InvalidOperationException>(() => writer.Write(Span<byte>.Empty));
+        }
+
+        [Fact]
+        public void Convert_To_Reader_Multiple_Times()
+        {
+            var writer = new ResizeBufWriter();
+            var reader = writer.ToReader();
+
+            Assert.Throws<InvalidOperationException>(() => writer.ToReader());
+        }
     }
 }

@@ -2,8 +2,6 @@
 
 A simple reader/writer for a Rust Vec that can be resized.
 
-TODO: Decide whether to track C# buffers through ref counting.
-
 */
 
 using System;
@@ -136,7 +134,8 @@ namespace ByteArray
         }
     }
 
-    public class ResizeBufWriter
+    // A writer for a Rust Vec.
+    public class ResizeBufWriter : IDisposable
     {
         private object _writeLock = new object();
         private ResizeBufHandle _handle;
@@ -168,10 +167,27 @@ namespace ByteArray
         {
             lock(_writeLock)
             {
+                if (_handle == null)
+                {
+                    throw new InvalidOperationException("ResizeBuf is not writable");
+                }
+
                 var reader = new ResizeBufReader(_handle);
                 _handle = null;
 
                 return reader;
+            }
+        }
+
+        public void Dispose()
+        {
+            lock(_writeLock)
+            {
+                if (_handle != null)
+                {
+                    _handle.Dispose();
+                    _handle = null;
+                }
             }
         }
     }
@@ -192,11 +208,6 @@ namespace ByteArray
 
         public Span<byte> Slice()
         {
-            if (_handle == null)
-            {
-                throw new InvalidOperationException("ResizeBuf is not readable");
-            }
-
             return _handle.Read();
         }
     }
