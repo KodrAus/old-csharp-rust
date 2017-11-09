@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 
 namespace ByteArray
 {
-    internal class Native
+    internal static class Native
     {
         [DllImport("bytearray_native", EntryPoint = "alloc", ExactSpelling = true)]
         internal static extern ResizeBuf Alloc(UIntPtr size);
@@ -37,12 +37,13 @@ namespace ByteArray
     // here.
     internal class ResizeBufHandle : SafeHandle
     {
-        public ResizeBufHandle()
-            : base(IntPtr.Zero, true)
-        { }
-
         private bool _allocated;
         private ResizeBuf _value;
+
+        public ResizeBufHandle()
+            : base(IntPtr.Zero, true)
+        {
+        }
 
         public override bool IsInvalid => false;
 
@@ -50,24 +51,17 @@ namespace ByteArray
         public Span<byte> Read()
         {
             if (IsClosed)
-            {
                 throw new ObjectDisposedException("ResizeBuf already closed");
-            }
 
-            unsafe
-            {
-                return ValueSpan().Slice(0, (int)_value.len);
-            }
+            return ValueSpan().Slice(0, (int) _value.len);
         }
-        
+
         // Append some bytes to the end of the buf
         // TODO: Support writing into part of the vec
         public void Write(Span<byte> data)
         {
             if (IsClosed)
-            {
                 throw new ObjectDisposedException("ResizeBuf already closed");
-            }
 
             Write(data, false);
         }
@@ -76,52 +70,49 @@ namespace ByteArray
         // This isn't optimised, so it's simple and readable.
         private void Write(Span<byte> data, bool resized)
         {
-            var dataLen = data.Length;
-
-            if (!_allocated)
+            while (true)
             {
-                // If the buffer isn't allocated then go and do that
+                var dataLen = data.Length;
 
-                _value = Native.Alloc(new UIntPtr((uint)dataLen));
-                _allocated = true;
+                if (!_allocated)
+                {
+                    // If the buffer isn't allocated then go and do that
 
-                Write(data, true);
-            }
-            else
-            {
+                    _value = Native.Alloc(new UIntPtr((uint) dataLen));
+                    _allocated = true;
+
+                    resized = true;
+                    continue;
+                }
+
                 // If the buffer is allocated, make sure it has enough space
 
-                var available = (int)_value.cap - (int)_value.len;
+                var available = (int) _value.cap - (int) _value.len;
 
                 if (dataLen > available)
                 {
                     // If there isn't enough space, resize and try write again
 
                     if (resized)
-                    {
                         throw new Exception("Already tried to resize ResizeBuf");
-                    }
 
                     var needed = dataLen - available;
 
-                    _value = Native.Reserve(_value, new UIntPtr((uint)needed));
+                    _value = Native.Reserve(_value, new UIntPtr((uint) needed));
 
-                    Write(data, true);
+                    resized = true;
+                    continue;
                 }
-                else
-                {
-                    // If the buffer is allocated and there's space, then copy the bits
 
-                    Span<byte> slice;
+                // If the buffer is allocated and there's space, then copy the bits
 
-                    unsafe 
-                    { 
-                        slice = ValueSpan().Slice((int)_value.len); 
-                    }
+                Span<byte> slice;
 
-                    data.CopyTo(slice);
-                    _value.len += dataLen;
-                }
+                slice = ValueSpan().Slice((int) _value.len);
+
+                data.CopyTo(slice);
+                _value.len += dataLen;
+                break;
             }
         }
 
@@ -129,7 +120,7 @@ namespace ByteArray
         // This may span uninitialised memory
         private unsafe Span<byte> ValueSpan()
         {
-            return new Span<byte>(_value.ptr.ToPointer(), (int)_value.cap);
+            return new Span<byte>(_value.ptr.ToPointer(), (int) _value.cap);
         }
 
         protected override bool ReleaseHandle()
@@ -142,27 +133,36 @@ namespace ByteArray
     // A writer for a Rust Vec.
     public class ResizeBufWriter : IDisposable
     {
-        private object _writeLock = new object();
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
+        private readonly object _writeLock = new object();
+
         private ResizeBufHandle _handle;
 
-        internal ResizeBufWriter(ResizeBufHandle handle)
+        private ResizeBufWriter(ResizeBufHandle handle)
         {
             _handle = handle;
         }
 
         public ResizeBufWriter() : this(new ResizeBufHandle())
         {
-            
         }
-        
+
+        public void Dispose()
+        {
+            lock (_writeLock)
+            {
+                if (_handle == null) return;
+                _handle.Dispose();
+                _handle = null;
+            }
+        }
+
         public void Write(Span<byte> data)
         {
-            lock(_writeLock)
+            lock (_writeLock)
             {
                 if (_handle == null)
-                {
                     throw new InvalidOperationException("ResizeBuf is not writable");
-                }
 
                 _handle.Write(data);
             }
@@ -170,12 +170,10 @@ namespace ByteArray
 
         public ResizeBufReader ToReader()
         {
-            lock(_writeLock)
+            lock (_writeLock)
             {
                 if (_handle == null)
-                {
                     throw new InvalidOperationException("ResizeBuf is not writable");
-                }
 
                 var reader = new ResizeBufReader(_handle);
                 _handle = null;
@@ -183,23 +181,11 @@ namespace ByteArray
                 return reader;
             }
         }
-
-        public void Dispose()
-        {
-            lock(_writeLock)
-            {
-                if (_handle != null)
-                {
-                    _handle.Dispose();
-                    _handle = null;
-                }
-            }
-        }
     }
 
     public class ResizeBufReader
     {
-        private ResizeBufHandle _handle;
+        private readonly ResizeBufHandle _handle;
 
         internal ResizeBufReader(ResizeBufHandle handle)
         {
@@ -208,7 +194,6 @@ namespace ByteArray
 
         public ResizeBufReader() : this(new ResizeBufHandle())
         {
-            
         }
 
         public Span<byte> Slice()

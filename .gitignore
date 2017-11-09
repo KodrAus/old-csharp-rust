@@ -3,3 +3,4 @@
 *.dll
 *.exe
 *.nupkg
+.idea

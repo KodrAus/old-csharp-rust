@@ -5,7 +5,7 @@ description = "A library for testing cargo nuget"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 
 [lib]
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 libc = "*"
