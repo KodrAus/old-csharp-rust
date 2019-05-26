@@ -1,3 +1,5 @@
+This sample is a bit out of date now. For something more current and mucu more fleshed out, [see here](https://github.com/KodrAus/rust-csharp-ffi).
+
 # Rust/CSharp Interop
 
 C# is capable of interopping with native C code. It's a common feature that projects like Kestrel use this heavily to communicate with `libuv` for efficient asynchronous io.
